@@ -1,0 +1,480 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{bbold}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\algnewcommand{\algorithmicand}{\textbf{ and }}
+\algnewcommand{\algorithmicor}{\textbf{ or }}
+\algnewcommand{\OR}{\algorithmicor}
+\algnewcommand{\AND}{\algorithmicand}
+\usepackage{amsthm}
+\usepackage{geometry}[margins = 1in]
+\renewcommand{\baselinestretch}{1.5}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\newtheorem{theorem}{Theorem}[section]
+\usepackage{algorithm}
+\usepackage[acronym]{glossaries}
+\usepackage{todonotes}
+\usepackage{mathtools}
+\usepackage[mathscr]{euscript}
+\let\euscr\mathscr \let\mathscr\relax% just so we can load this and rsfs
+\usepackage[scr]{rsfso}
+\newcommand{\powerset}{\raisebox{.15\baselineskip}{\Large\ensuremath{\wp}}}
+\loadglsentries{glossary}
+\usepackage[backend=biber,citestyle=numeric]{biblatex}
+\addbibresource{bibliography.bib}
+\title{\textsc{Scalable MCMC}}
+\author{\textsc{Oda Johanne Kristensen}}
+\date{}
+\usepackage{listings}
+
+\begin{document}
+\maketitle
+\section{Introduction}
+\subsection{Notation}
+$\theta$ : Model parameter \\
+$\mathbf{X}$ : \\
+$\mathbf{x}$: observed data \\
+$\mathbf{Y}$: \\
+$\mathbf{y}$: response \\
+$\mathbf{z}:$ auxilliary variables 
+\subsection{The data set}\label{subsec:data}
+In this thesis, we will test different methods for \textbf{statistical inference} on simulated binary data. These data are simulated in R in the following way
+\begin{lstlisting}[caption={simulation of binary data}, label={lst:simulation}]
+set.seed(23423)
+n = 1000
+x = sort(rnorm(n))
+beta = c(1,2)
+logist = function(x){1/(1+exp(-x))}
+p = logist(beta[1]+beta[2]*x)
+y = rbinom(n,1,prob=p)
+\end{lstlisting}
+As we see from listing \ref{lst:simulation}, we first draw standard normal data $x$, and define $\beta_1 = 1, \beta_2 = 2$. Next, we plug the  $u = \beta_1 + \beta_2 x$ into the logistic cumulative density. This results in a vector of probabilities, which we use to draw binary data $y$. Although this is a very simple method for data generation, if we are to perform logistic regression on the data $x$, and the response $y$ using \gls{mcmc}-methods, this may run slowly on a computer if there is a lot of data.
+\subsection{Bayesian statistics}\label{sec:bayesian}
+Traditionally, statistics has been divided into two schools, frequentist statistics and Bayesian statistics. There are many interpretations of the difference in philosophy between these two schools, which we will not go into very deeply here, but statisticians in favour of using Bayesian methods  rather than frequentist argue that one limitation of frequentist methods is that inference is not conditional on the observed data \cite{Wagenmakers}.   In the frequentist approach, the parameter $\theta$ is thought of as  fixed, but unknown, meaning that there exists some true $\theta$ that can describe the model, and inference about this parameter is only based on the data we have from that population. In Bayesian statistics on the other hand, we still believe $\theta$ is a fixed value, but the uncertainty of $\theta$ is represented by a probability distribution. Before we have seen any data, we represent $\theta$ by what we call the prior, a probability distribution representing our knowledge (or lack of knowledge) of $\theta$, before viewing the data \cite{SI}. \todo{Sjekk denne referansen}
+When data is present, the knowledge we have about $\theta$ is updated by the observed data through Bayes theorem. 
+\begin{theorem}{\textsc{Bayes' theorem}}\label{eq:Bayes}
+\vspace{1em}
+\begin{equation}
+    P\left(A\mid B \right) = \frac{P\left(A\right)P\left(B\mid A \right)}{P\left(B\right)}
+\end{equation}
+\end{theorem} In the setting of Bayesian statistics, theorem \ref{eq:Bayes} is often presented as
+\begin{equation*}
+p\left(\theta\mid x\right) = \frac{p\left(\theta\right)f\left(x\mid\theta\right)}{f\left(x\right)} = \frac{p\left(\theta\right)L\left(\theta, x\right)}{f\left(x\right)}
+\end{equation*}
+Here, $p\left(\theta\mid x \right)$ is called the posterior distribution of $\theta$, $p\left(\theta\right)$ is the prior, $f\left(x\mid\theta\right) = L\left(\theta, x\right)$ is the distribution of the data given the model parameter $\theta$, also known as the likelihood function, and $f\left(x\right)$ is the marginal distribution of the observed data. 
+All Bayesian statistics revolves around this posterior distribution. 
+There are many benefits of this, one of which is the interpretation of uncertainty intervals. 
+A frequentist $\alpha \times 100\%$-confidence interval about a parameter $\theta$ has to be interpreted as \textit{if we repeat the experiment infinitely many times, the true value of $\theta$ will be inside the $\alpha\times 100\%$-confidence interval, in $\alpha\times 100\%$ of the cases}. As we see, the frequentist uncertainty interval is  
+Instead, by using a credibility interval, the Bayesian equivalent of a confidence interval, we do not have to think about the  we can interpret the resulting interval in a more intuitive way: the probability that the true parameter $\theta$ is inside a $\alpha\times 100\%$ credibility interval is $\alpha\times 100\%$ conditional on the given data, meaning that we do not have to think about the asymptotics as in the frequentist case.  One benefit of Bayesian inference is that it often seems more intuitive than the corresponding frequentist method. \todo{Flere eksempler?}
+A problem with Bayesian statistics however, is that it is often computationally difficult. In (\ref{eq:Bayes}), $p\left(\theta\right)$ is usually known, as the statistician can chose it herself, and the likelihood $L\left(\theta, x\right)$ is also usually assumed known. The problem is the denominator, $f\left(x\right)$. If the prior is not a conjugate prior of the posterior, we need to calculate 
+\begin{equation}\label{eq:marginal}
+    f\left(x\right) = \int_{\Theta}f\left(x,\theta\right) d\theta = \int_{\Theta} p\left(\theta\right)L\left(\theta, x\right) d\theta
+\end{equation}
+In some (\textbf{many?}) cases, this integral may not be analytically tractable, and we need numerical methods, like \gls{mcmc} or the newer method, \gls{vi}, to calculate an approximation of (\ref{eq:marginal}) Out of the two, \gls{mcmc} is significantly slower than \gls{vi}, but \gls{mcmc} has the advantage that it is asymptotically exact \cite{vi} .Until recent years, this has been a major disadvantage of Bayesian inference, as \gls{mcmc} is very computationally expensive, and the computational power simply has not been available.  Now, we have the computational power, but \gls{mcmc} methods may still run slowly in cases where there is a big amount of data, or the problem is high dimensional. 
+\subsection{Markov chains}\label{sec:markov}
+\subsubsection{Discrete case}\label{subsec:markov_discrete}
+To explain the idea behind \gls{mcmc}, we first need to recall some Markov chain theory. 
+A Markov chain is a sequence of probabilistic states, where the state at the current time is only dependent on the previous state. 
+\par
+We let $\{\theta^{\left(i\right)}\}, \; i = 0, 1, \ldots, n$, be a sequence of random variables where $\theta^{\left(i\right)}$ is called the state at time $i$. In a general case, the joint distribution of the random sequence $\theta^{(0)}, \ldots, \theta^{(n)}$ is given by the product of the conditional distributions of each random variable given its history \cite{CS}.  i.e. 
+\begin{equation*}
+    P\left(\theta^{(0)}, \ldots, \theta^{(n)}\right) = P\left(\theta^{(0)}\right) P\left(\theta^{(1)}\mid \theta^{(0)}\right)  \cdots  P\left(\theta^{(n)}\mid \theta^{(n-1 )},\ldots, \theta^{(0)}\right)
+\end{equation*}
+However, for a sequence of random variables $\{\theta^{(i)}\}$ possessing the Markov property, the state at the current time step,  $i$, $\theta^{(i)}$ will only be dependent on the previous state $\theta^{(i-1)}$, so the conditional distribution of the random variable $\theta^{(i)}$ given its history, can be simplified to $$P\left(\theta^{(i)}\mid \theta^{(i-1)}, \theta^{(i-2)}, \ldots, \theta^{(0)}\right) = P\left(\theta^{(i)}\mid \theta^{(i-1)}\right)$$
+and so the joint distribution of the random sequence is given by 
+\begin{equation*}
+    P\left(\theta^{(0)}, \ldots, \theta^{(n)}\right) = \prod_{i = 0}^n P\left(\theta^{(i+1)}\mid X^{(i)}\right)
+\end{equation*}
+For further reference we define some concepts relating to Markov chains.
+\theoremstyle{definition}
+\begin{definition}{\textsc{Irreducibility}} A Markov chain is said to be irreducible if $\forall i, j \quad \exists m > 0 \quad s.t. \\ P\left(X^{(m+n)} = i\mid X^{(n)} = j \right) > 0$
+\end{definition}
+i.e. Any state $i$ can be reached from any state $j$ in a finite number of steps, $m$.
+\theoremstyle{definition}
+\begin{definition}{\textsc{Recurrency}} 
+A Markov chain that can only return to a state in a multiple of $d>1$ steps, is said to be recurrent. 
+\end{definition}
+\begin{definition}{\textsc{Periodicity}} 
+A Markov chain is said to be periodic if it can visit a certain state space only at a certain, regularly spaced intervals
+\end{definition}
+\theoremstyle{definition}
+\begin{definition}{\textsc{Aperiodicity}}
+A Markov chain is said to be aperiodic if all states in the state space have period 1. 
+\end{definition}
+\todo{Trenger kilde her}
+If a Markov chain satisfy the conditions of irreducibility, recurrency and aperiodicity, then there exists a unique \todo{referanse/bevis} distribution $f$ such that
+\begin{equation*}
+\lim_{t\xrightarrow{}\infty}P\left(X^{(t)}\in A\mid X^{(0)} = x\right) = \int_{A} f\left(y\right) dy
+\end{equation*}
+where $f\left(x\right)$ is what we call the stationary distribution of the Markov chain. Then we find the stationary distribution by solving 
+\begin{equation}\label{eq:MCstationary}
+    f(y) = \int_x f(x) P(y\mid x) dx 
+\end{equation}In our case, we want the stationary distribution $f(x)$ be the posterior distribution, so we need to find a transition density  $P\left(y\mid x\right)$ that satisfies (\ref{eq:MCstationary}). This may be difficult, but \textit{detailed balance} is a sufficient criterion for (\ref{eq:MCstationary}). \todo{referanse/bevis}
+\theoremstyle{definition}
+\begin{definition}{\textsc{Detailed Balance}} \label{def:detailed_balance}
+   $ f(x)P\left(x\mid y\right) = f(y)P\left(y\mid x\right)$
+\end{definition}
+So a Markov chain with transition density $P\left(x\mid y\right)$ that satisfies (\ref{def:detailed_balance}) will have $f$ as stationary distribution. 
+\subsubsection{Continuous case}
+Often, the problems we want to solve using \gls{mcmc} have continuous \textbf{stationary distributions}, and so the definitions in section \ref{subsec:markov_discrete} are not sufficient. In order to have the Markov chain converge to the stationary distribution, we need some conditions that must be satisfied \cite{MCMC_in_pract}. In the general case, irreducibility is defined with respect to a distribution. We let $E$ denote the state space, \textbf{which must satisfy some conditions}, and $\tau_A$ denote the number of steps until the first return of a Markov chain to a set $A\subset E$.  $\tau_A = \inf\left\{n\geq 1 : X_n \in A\right\}$. If the chain never returns to $A$, $\tau_A = \infty$.
+\begin{definition}{\textsc{Irreducibility}}\label{def:gen_irr}
+   A Markov chain is $\phi$-irreducible for a probability distribution $\phi$ on $E$ if $\phi\left(A\right) > 0$ for a set $A\subset E$ implies that $$P_x\left\{\tau_A < \infty\right\} > 0$$ for all $x\in E$ a chain is irreducible if it is $\phi$-irreducible for some probability distribution $\phi$. If a chain is $\phi$-irreducible, then $\phi$ is called an irreducibility distribution for the chain. 
+\end{definition}
+From definition \ref{def:gen_irr}, we see that the \textbf{probability of the chain to return to set $A$ is positive}.  For the next definition, we need to define the term \textit{maximal irreduciblity distribution}. If a Markov chain is irreducible, it can be shown that it has a distribution $\psi$, called the maximal irreducibility distributions, where all other irreducibility distributions are absolutely continuous with respect to $\psi$.  
+\begin{definition}{\textsc{Recurrence}}
+An irreducible Markov chain with maximal irreducibility distribution $\psi$ is recurrent if for any set $A\subset E$ with $\psi\left(A\right)>0$ the conditions
+$$(i)\quad P_x \left\{X_n \in A \; \textit{infinitely often}\right\} > 0\quad \textit{for all}\; x$$ 
+$$(ii) \quad P_x\left\{X_n\in A \; \textit{infinitely often} \right\} = 1 \quad \textit{for}\;\psi \textit{-almost all} \; x$$
+are both satisfied. An irreducible recurrent chain is positive recurrent if it has an invariant probability distribution. Otherwise it is null recurrent. 
+\end{definition}
+\textbf{What about aperiodicity?}
+\subsection{Markov Chain Monte Carlo}
+\gls{mcmc} are  methods used to sample from a distribution close to the posterior when it is difficult to sample from the true posterior. As mentioned in section \ref{sec:bayesian}, 
+doing inference when the prior $p\left(\theta\right)$ is not a conjugate distribution of the likelihood $f\left(x ; \theta\right)$ can be very difficult. In stead of evaluating the true posterior directly, we approximate it by drawing values of $\theta$ from an approximate distribution. As we saw in  section \ref{sec:markov}, an irreducible, recurrent, aperiodic Markov chain has a unique stationary distribution $f(x)$. In the context of Markov Chain Monte Carlo, we want to construct a Markov chain in such a way that the stationary distribution of the Markov chain is the posterior distribution that we are interested in.\todo{Tror jeg burde skrive mer her, men er ikke helt sikker på hva}
+\subsection{The history of Markov Chain Monte Carlo}
+\subsection{The Metropolis-Hastings algorithm}
+The \gls{mh} algorithm is a very general algorithm and one of the most popular algorithms for MCMC. The algorithm for \gls{mh} is given below
+\begin{algorithm}[H]\label{algo:MH}
+    \caption{Metropolis-Hastings}
+    \label{algo:MH}
+    \begin{algorithmic}[1] % The number tells where the line numbering should start\
+        \State $\theta \sim \textsc{InitialDist}$ 
+        \For {$i \gets 1 \ldots \textsc{Iters}$}
+        \State$\theta' \sim \theta_{i-1} + \eta$ where $\eta\sim g\left(\cdot \mid \theta_{i-1}\right)$
+        \State $u\sim \textsc{Uniform}\left(0,1\right)$
+        \If{ $\frac{\textsc{JointPosterior} \left(\theta'; \{z_n\}_{n = 1}^N\right)g\left(\theta_{i-1}\mid \theta'\right)}{\textsc{JointPosterior} \left(\theta_{i-1}; \{z_n\}_{n = 1}^N\right)g\left(\theta'\mid \theta_{i-1}\right)} > u$}
+        \State $\theta_i = \theta'$
+        \Else 
+        \State $\theta_i = \theta_{i-1}$
+         \EndIf
+         \EndFor
+         \\
+        \Function{JointPosterior}{$\theta; \{z_n\}_{n = 1}^N$} 
+            \State $P \gets p\left(\theta\right)\times \prod_{n=1}^N L_n\left(\theta\right)$
+           \State \textbf{return} $P$
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm}
+In algorithm \ref{algo:MH}, $g\left(\cdot \mid \theta_{i-1}\right)$ is called the proposal distribution of $\theta$
+With \gls{mh}, we can draw samples from any probability distribution, as long as a function that it is proportional of, i.e. we need to know the numerator in (\ref{eq:Bayes}), but we do not need to know the denominator, $f\left(x\right)$. As we saw in section \ref{sec:bayesian}, it is $f\left(x\right)$ that is difficult to calculate, so this suits us well. 
+We must show that the stationary distribution of the Metropolis-Hastings algorithm actually is the posterior density that we are interested in.
+\subsection{Problems with the M-H algorithm}
+As we see from the set-up of the Metropolis-Hastings algorithm, the computational time of course depends on the number of iterations we choose. This is very tunable, however we expect the distribution of the Markov chain to approach the true distribution with an increasing number of iterations, so this parameter should be chosen so that the calculations are computationally feasible, while not compromising the exactness of the results. 
+What is a bigger problem for the computational complexity of the Metropolis-Hastings algorithm is the calculation of the likelihood function for all the data with the given parameters. When $N$ is the number of data points, evaluating this likelihood function has a computational cost of  $\mathcal{O}(N)$, or more for complex models. If the data set that we calculate the likelihood from is large, the computer will spend a significant amount of time calculating the likelihood at each iteration, and so the program will run slowly. 
+\section{Method}
+\subsection{Firefly Monte Carlo}
+\todo{Noen ting jeg ikke har fått rettet opp i siden sist}
+In their paper from 2014, Maclaurin and Adams  introduce the Firefly Monte Carlo method \cite{Maclaurin:1}. The aim of this method is to reduce the computational cost of MH-like algorithms by evaluating the likelihood function for only a subset of the data, while still leaving "[...],the true full-data posterior distribution invariant", meaning that the true posterior $p(\theta\mid\{x_n\}_{n=1}^N)$ is still the stationary distribution of the Markov chain.  
+We assume the data $x_n$ conditionally independent given $\theta$.
+For each data point $x_n$ Maclaurin and Adams introduce auxiliary variables $z_n \in \{0, 1\}$, "and a function $B_n(\theta)$ which is a strictly positive, lower bound of the $n$'th likelihood, $L_n(\theta)$". 
+The $z_n$'s are let to be Bernoulli distributed, conditioned on the parameters, i.e.
+The $z_n$'s are conditioned on the parameters $x_n$ and $\theta$, and drawn from a Bernoulli distribution, i.e.
+\begin{equation}\label{eq:auxiliary_dist}
+    p(z_n\mid x_n,\theta) = \left[\frac{L_n(\theta) - B_n(\theta)}{L_n(\theta)}\right]^{z_n}\left[\frac{B_n(\theta)}{L_n(\theta)}\right]^{1-z_n}
+\end{equation}
+We say that a data point $x_n$ is bright if $z_n = 1$, and that it is dark if $z_n = 0$. From (\ref{eq:auxiliary_dist}), we see that a data point $x_n$ is more likely to be bright if $L_n(\theta) - B_n(\theta)$ is large, i.e. the lower bound $B_n(\theta)$ is not "tight" to the likelihood $L_n(\theta)$. Including these auxiliary variables, we get the following joint probability distribution. 
+\begin{equation*}
+\begin{split}
+     p(\theta, \{z_n\}_{n=1}^N\mid\{x_n\}_{n=1}^N) &\propto p(\theta, \{x_n, z_n\}_{n = 1}^N) \\
+     &= p(\theta) p(\{x_n, z_n\}_{n=1}^N\mid\theta) \\
+     & = p(\theta)p(\{x_n\}_{n=1}^N\mid\theta)p(\{z_n\}_{n=1}^N\mid \{x_n\}_{n=1}^N, \theta)
+\end{split}
+\end{equation*}{}
+\todo{Bruker samme subscript for bestemt indeks som for generelle indekser} This can be simplified further by using that each $z_n$ is only dependent on the $n$'th data point $x_n$ and that the $x_n$'s are conditionally independent given $\theta$. The result is the following joint probability 
+\begin{equation}\label{eq:joint}
+           p(\theta, \{z_n\}_{n=1}^N \mid \{x_n\}_{n=1}^N) \propto p(\theta) \prod_{n=1}^N p(x_n\mid\theta)p(z_n\mid x_n, \theta)
+\end{equation}
+Inserting (\ref{eq:auxiliary_dist}) into (\ref{eq:joint}), and using that $L_n(\theta) = p(x_n\mid\theta)$
+\begin{equation}
+\begin{split}
+     p(\theta, \{z_n\}_{n=1}^N\mid\{x_n\}_{n=1}^N &\propto p(\theta) \prod_{n=1}^N L_n(\theta)\left[\frac{L_n(\theta) - B_n(\theta}{L_n(\theta}\right]^{z_n}\left[\frac{B_n(\theta)}{L_n(\theta)}\right]^{1-z_n} \\
+     &= p(\theta) \prod_{n=1}^N p\left(x_n\mid\theta\right)\sum_{z_n} p\left(z_n\mid x_n, \theta\right)
+     \\
+     &= p(\theta) \prod_{n=1}^N p\left(x_n\mid\theta\right)
+\end{split}
+\end{equation}
+\begin{equation}
+\label{eq:firefly}
+\begin{split}
+     =p(\theta)
+     \begin{cases}
+        L_n(\theta) - B_n(\theta) & if \quad z_n = 1 \\
+        B_n(\theta) & if \quad z_n = 0
+     \end{cases}
+\end{split}
+\end{equation}
+The consequence of (\ref{eq:firefly}) is that it is not necessary to calculate the likelihood term for every data point $x_n$. It is only necessary when that data point is bright. If a data point is dark, we will not calculate its likelihood $L_n(\theta)$, but only the lower bound of its likelihood, $B_n(\theta)$. 
+As can be seen from (\ref{eq:auxiliary_dist}), the number of bright data points is dependent on the tightness of the lower bounds $B_n(\theta)$. To limit the time it takes to evaluate the joint posterior, the number of bright data points should also be limited. Also $B_n(\theta)$ should be simple to compute, if not the computational burden will only be shifted to calculating $B_n(\theta)$ in stead of $L_n(\theta)$. 
+It is not always trivial to find such a $B_n$. In the case of normally distributed data, we use the same approach as section 7.2.1 in Bardenet et al.
+\todo{This algorithm does not have proposal distribution included}
+\begin{algorithm}[H]
+    \caption{Firefly Monte Carlo}
+    \label{algo:firefly}
+    \begin{algorithmic}[1] % The number tells where the line numbering should start
+        \State $\theta \sim \textsc{InitialDist}$ 
+        \For {$i \gets 1 \ldots \textsc{Iters}$}
+        \For {$j \gets \left[N\times \textsc{ResampleFraction}\right]$}
+        \State $n\sim \textsc{RandInteger}\left(1, N\right)$
+        \State $z_n \sim \textsc{Bernoulli}\left(1 - B_n\left(\theta_{i - 1}\right)/L_n\left(\theta_{i-1}\right)\right) $
+        \EndFor
+        \State$\theta' \sim \theta_{i-1} + \eta$ where $\eta\sim \textsc{Normal}\left(0, \epsilon^2 \mathbb{1}_D\right)$
+        \State $u\sim \textsc{Uniform}\left(0,1\right)$
+        \If{ $\frac{\textsc{JointPosterior} \left(\theta'; \{z_n\}_{n = 1}^N\right)}{\textsc{JointPosterior} \left(\theta_{i-1}; \{z_n\}_{n = 1}^N\right)} > u$}
+        \State $\theta_i = \theta'$
+        \Else 
+        \State $\theta_i = \theta_{i-1}$
+         \EndIf
+         \EndFor
+         \\
+        \Function{JointPosterior}{$\theta; \{z_n\}_{n = 1}^N$} 
+            \State $P \gets p\left(\theta\right)\times \prod_{n=1}^N B_n\left(\theta\right)$
+            \For{$\mathbf{each}\; n\; \mathbf{for\;which}\;z_n = 1$}
+                \State $P\gets P \times \left(L_n\left(\theta\right)/B_n\left(\theta\right) - 1\right)$
+                \EndFor
+           \State \textbf{return} $P$
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm}
+In algorithm \ref{algo:firefly}, we use a normal distribution as proposal distribution, but we can use any proposal distribution, just like in algorithm \ref{algo:MH}. 
+\section{Lower bound for logistic model}
+The logistic regression model has the following likelihood 
+\begin{equation}\label{eq:log_reg}
+    L_n\left(\theta\right) = \frac{1}{1 + \exp\left(-t_n\theta^{\top} x_n\right)} 
+\end{equation}
+where $x_n \in R^d$ is the $n$th data point and $t_n\in \{-1, 1\}$ indicates the class. 
+\cite{Maclaurin:1} and \cite{Bardenet:1} shows two different approaches to finding a lower bound for the logistic regression likelihood, showed in (\ref{eq:log_reg}). Maclaurin suggest using a lower bound for the logistic model from \textbf{Jaakkola and Jordan},  $B_n$ for the likelihood $L_n$ on the following form 
+\begin{equation}\label{eq:Jakkola_bound}
+    \log\left(B_n\left(\theta\right)\right) = a\left(t_n\theta^{\top}x_n\right)^2 + b\left(t_n\theta^{\top} x_n\right) + c
+\end{equation}
+Where $a,b,c$ is defined by
+\begin{equation}
+\begin{split}
+    a &= -\frac{1}{4\xi}\left(\frac{e^{\xi} - 1}{e^{\xi} + 1}\right), \quad b = \frac{1}{2} \\
+    c &= -a\xi^2 + \frac{\xi}{2} - \log\left(e^{\xi} + 1\right)
+\end{split}
+\end{equation}
+With $\xi$ the location where the bound $B_n$ should be tight to $L_n$. 
+Bardenet et al. select a different approach using second order Taylor expansions, and then applying the Taylor-Lagrange theorem to bound the remainder. This is a bit more work than calculating the bound in  (\ref{eq:Jakkola_bound}), but this method can be applied to other likelihood functions as well, and thus the Taylor expansion approach is a lot more flexible. 
+\begin{equation*}
+\ell_n(\theta) = \phi\left(t_n\theta, x_n^T\right)
+\end{equation*}
+where $\phi(z) = -\log\left( 1  + e^{-z}\right)$ is the log-likelihood of the logistic regression model, and the label $t_i$ is in $\{-1, 1\}$. To find the lower bound of the log-likelihood, we need to calculate the third derivative. 
+\begin{equation*}
+\begin{split}
+\frac{d}{dz} \left( - \log\left(1 + e^z\right)\right) &= - \frac{1}{1 + e^{-z}} \left(-e^{-z}\right) \\
+& = \frac{1}{e^z \left(1+e^{-z}\right)} \\
+& = \frac{1}{e^z + 1}
+\end{split}
+\end{equation*}
+\begin{equation*}
+    \begin{split}
+        \frac{d^2}{dz^2}\left(-\log\left(1 + e^z \right)\right) 
+        & = \frac{d}{dz} \left(\frac{1}{e^z +1}\right) \\
+        & = \left(-1\right)e^z \left(1 + e^z\right)^{-2} \\
+        & = -\frac{e^z}{\left(1 + e^z\right)^2} 
+\end{split} 
+\end{equation*}
+\begin{equation*}
+\begin{split}
+    \frac{d^3}{dz^3}\left( -\log\left(1 + e^{-z}\right)\right) &= \frac{d}{dz}\left( - \frac{e^z}{\left(1 + e^z\right)^2}\right) \\
+    & = \frac{- e^z \left(1 + e^z\right)^2 - 2e^z\left(1 + e^z\right)\left(-e^z\right)}{\left(e^z + 1\right)^4}\\
+    &=\frac{e^z\left(1+e^z\right)\left[-\left(1 + e^z\right) + 2e^z\right]}{\left(e^z + 1\right)^4} \\
+    &= \frac{e^z\left[-1 -e^z + 2e^z\right]}{\left(e^z + 1\right)^3} \\
+    &= \frac{e^z \left(e^z -1\right)}{\left(e^z + 1 \right)^3}
+\end{split}
+\end{equation*}
+We use hyperbolic identities $\tanh(x) = \frac{\sinh(x)}{\cosh(x)} = \frac{e^x - e^{-x}}{e^x + e^{-x}}$ and $\cosh^2(x) = \left(\frac{e^x + e^{-x}}{2}\right)^2$
+We have: 
+\begin{equation*}
+\begin{split}
+\frac{\tanh(z/2)}{\cosh^2(z/2)}  &= \frac{\sinh(z/2)}{2\cosh^3(z/2)} 
+= \frac{e^{z/2} - e^{-z/2}}{2\left(\frac{e^{z/2} + e^{-z/2}}{2}\right)^3} \\
+& = 4\frac{e^{z/2} - e^{-z/2}}{\left(e^{z/2} + e^{-z/2}\right)^3}
+ = 4\frac{e^{-z/2}\left(e^z -1\right)}{\left[e^{-z/2}\left(e^z + 1\right)\right]^3} \\
+& = 4\frac{e^{3z/2}e^{-z/2}\left(e^z+1\right)}{\left(e^z + 1\right)^3} 
+ = 4 \frac{e^z\left(e^z + 1\right)}{\left(e^z +1 \right)^3} \\
+& = 4\phi'''(z) 
+\implies \phi'''(z) = \frac{1}{4}\frac{\tanh(z/2)}{\cosh^2(z/2)} \leq \frac{1}{4}
+\end{split}
+\end{equation*}
+\textbf{insert here about $\max_i \Vert X_i \Vert$ etc. }
+Then we can apply (\ref{eq:taylor_lagr}) to find the remainder of the second order Taylor polynomial. 
+
+
+
+
+\subsection{Finding the lower bound of the likelihood}
+\todo{Denne seksjonen er ikke så aktuell akkurat nå}
+In \cite{Bardenet:1}, the log-likelihood of the normal distributed data is bounded by a second order Taylor approximation about the maximum likelihood estimate (MLE). i.e. 
+\begin{equation}
+  \hat{\ell}_n = \ell_n(\theta_{\star} ) + g_{n,\star}^T\left(\theta - \theta_{\star}\right) + \frac{1}{2}\left(\theta - \theta_{\star}\right)^T H_{n, \star}\left(\theta - \theta_{\star}\right)
+\end{equation}
+Where $\theta_{\star}$ is the MLE for $\theta$, $g_{n,\star}$ is the vector of first derivatives w.r.t $\theta$ evaluated in $\theta_{\star}$, and $H_{n, \star}$ is the Hessian evaluated in $\theta_{\star}$. The normal distribution with parameter $\theta = (\mu, \sigma)$  is given by 
+\begin{equation}
+    L_n(\mu, \sigma) = \frac{1}{\sqrt{2\pi}\sigma}e^{-\frac{\left(x_n-\mu\right)^2}{2\sigma^2}}
+\end{equation}
+and we have 
+\begin{equation}\label{eq:norm_log}
+\begin{split}
+    \log\left(L_n(\mu, \sigma)\right) = \ell_n(\mu, \sigma) &= -\log\left(\sqrt{2\pi}\sigma\right) - \frac{\left(x_n - \mu\right)^2}{2\sigma^2} \\
+    &= - \log\left(\sqrt{2\pi}\right) - \log\left(\sigma\right) - \frac{\left(x_n-\mu\right)^2}{2\sigma^2}
+\end{split}
+\end{equation}
+To Taylor expand about the MLE, we first need to compute the derivatives and second derivatives of (\ref{eq:norm_log}). 
+\begin{equation}
+    \begin{split}
+    \frac{\partial \ell_n\left(\mu, \sigma\right)}{\partial \mu} &= \frac{x_n - \mu}{\sigma^2} 
+    \\ \frac{\partial \ell_n\left(\mu, \sigma\right)}{\partial \sigma} &= -\frac{1}{\sigma}  + \frac{\left(x_n - \mu \right)^2}{\sigma^3}\\
+    \frac{\partial^2\ell_n(\mu, \sigma)}{\partial \mu ^2} &= -\frac{1}{\sigma^2}, \\ 
+    \frac{\partial^2 \ell_n(\mu, \sigma)}{\partial\mu\partial \sigma} &=  \frac{\partial^2 \ell_n(\mu, \sigma)}{\partial \sigma \partial \mu} = -2\frac{(x_n - \mu)}{\sigma^3} \\  \frac{\partial^2 \ell_n(\mu, \sigma)}{\partial \sigma^2} &= \frac{1}{\sigma^2} - 3\frac{(x_n - \mu)}{\sigma^4}
+\end{split}
+\end{equation}
+Then, the second order Taylor expansion of the log-likelihood about the MLE, $\theta_{\star}$ is given by 
+\begin{align}
+    \ell_n\left(\theta\right) &= \hat{\ell}_n(\theta) + R(\theta) \\ & = \ell_n\left(\theta_{\star}\right) + \begin{bmatrix} \frac{x_n - \mu_{\star}}{\sigma_{\star}^2}&
+-\frac{1}{\sigma_{\star}} + \frac{\left(x_n - \mu_{\star}\right)^2}{\sigma_{\star}^3}\end{bmatrix} \begin{bmatrix} \mu - \mu_{\star} \\   \sigma - \sigma_{\star} \end{bmatrix} \\ &+ \frac{1}{2} \begin{bmatrix} \mu - \mu_{\star} & \sigma - \sigma_{\star} \end{bmatrix} \begin{bmatrix}- \frac{1}{\sigma_{\star}^2} & - 2\frac{\left(x_n - \mu_{\star}\right)}{\sigma_{\star}^3} \\ -2\frac{\left(x_n - \mu_{\star}\right)}{\sigma_{\star}^3} & - \frac{1}{\sigma_{\star}^2} - 3\frac{\left(x_n - \mu_{\star}\right)}{\sigma_{\star}^4}\end{bmatrix}  + R(\mu, \sigma)\notag 
+\end{align}
+Where $R(\mu, \sigma)$ is the Taylor remainder. To be able to use the second order Taylor expansion about the MLE as a lower bound for the log-likelihood, we need to bound the remainder, using the Taylor-Lagrange theorem. Which states that a Taylor expansion of order $n$ has a remainder $R_n$ bounded by the following expression. 
+\begin{equation}\label{eq:taylor_lagr}
+|R_n| \leq \frac{M\;|x-a|^{n+1}}{\left(n+1\right)!}
+\end{equation}
+Where $M$ satisfies $|f_{n+1}\left(x\right)| \leq M$ on some interval $I = \left[a, b\right]$. 
+We have expanded about $\theta = \left(\mu, \sigma\right)$.   
+\section{Bardenet et. al's confidence sampler}
+\subsection{Original adaptive subsampler (2014)}
+In their paper from 2014, Bardenet et al \cite{Bardenet:2} propose an adaptive subsampling method to reduce the computational cost of \gls{mh} for large data sets.  To reduce this cost, they take advantage of concentration equations in combination with subsampling of data. First, they rewrite the accept-reject step in, Algorithm \ref{algo:MH}  (line 8)  
+\todo{weird notation)}
+\begin{equation}\label{eq:some_use?}
+\begin{split}
+    u < \frac{\pi\left(\theta\right)q\left(\theta_k\mid \theta'\right)}{\pi \left(\theta_k\right)q\left(\theta'\mid \theta_k\right)} &= \frac{p\left(x_1, \ldots x_n \mid \theta'\right) p\left(\theta\right)q\left(\theta_k\mid \theta'\right)}{p\left(x_1, \ldots x_n\mid \theta_k\right)p\left(\theta_k\right)q\left(\theta'\mid\theta_k\right)} \\
+    \implies \frac{u q\left(\theta'\mid \theta_k \right)p\left(\theta_k\right)}{q\left(\theta_k\mid\theta'\right)p\left(\theta'\right)} &< \frac{p\left(x_1, \ldots, x_n \mid \theta'\right)}{p\left(x_1, \ldots, x_n \mid \theta_k\right)} \\
+    \implies \frac{u q\left(\theta'\mid \theta_k \right) p\left(\theta_k\right)}{q\left(\theta_k \mid \theta'\right) p \left(\theta'\right)} &< \frac{\prod_{i = 1}^n p\left(x_i\mid \theta'\right)}{\prod_{i = 1}^n p\left(x_i \mid \theta_k\right)}
+\end{split}
+\end{equation}
+Next, we take the logarithm on both sides of \ref{eq:some_use?}, and divide by $n$ and get
+\begin{equation}\label{eq:psi_lambda}
+\begin{split}
+     \frac{1}{n} \log \left[\frac{u q\left(\theta' \mid \theta_k\right)p\left(\theta_k\right)}{q\left(\theta_k\mid \theta'\right)p\left(\theta'\right)}\right] &< \frac{1}{n} \sum_{i = 1}^n \log \left[\frac{p\left(x_i\mid \theta'\right)}{p\left(x_i \mid \theta_k\right)}\right] \\
+     \iff  \psi\left(u, \theta_k, \theta'\right) &< \Lambda_n\left(\theta_k,\theta'\right) 
+\end{split}
+\end{equation}
+Where $\psi\left(u, \theta_k, \theta'\right)\coloneqq \frac{1}{n}\log\left[\frac{u q\left(\theta'\mid\theta_k\right)p\left(\theta_k\right)}{q\left(\theta_k\mid \theta'\right)p\left(\theta'\right)}\right]$ and $\Lambda_n\left(\theta_k, \theta'\right) \coloneqq \frac{1}{n}\sum_{i = 1}^n \log\left[\frac{p\left(x_i\mid \theta'\right)}{p\left(x_i\mid\theta_k\right)}\right]$. Then, it is evident from \eqref{eq:some_use?} and \eqref{eq:psi_lambda} that accepting $\theta'$ if $u < \frac{p\left(x_1\ldots, x_n\mid \theta\right)p\left(\theta\right)q\left(\theta_k\mid \theta'\right)}{p\left(x_1, \ldots, x_n\mid \theta_k\right)p\left(\theta_k\right)q\left(\theta_k\mid\theta'\right)}$ is equivalent to accepting $\theta'$ if $\Lambda_n\left(\theta_k, \theta'\right)>\psi\left(u,\theta_k\theta'\right)$. Using this, Algorithm \ref{algo:MH} can be rewritten as the following:
+\begin{algorithm}[H] 
+    \caption{Rewritten Metropolis-Hastings}
+    \label{algo:MH_rewritten}
+    \begin{algorithmic}[1] % The number tells where the line numbering should start\
+        \State $\theta \sim \textsc{InitialDist}$ 
+        \For {$i \gets 1 \ldots \textsc{Iters}$}
+        \State$\theta' \sim \theta_{i-1} + \eta$ where $\eta\sim g\left(\cdot \mid \theta_{i-1}\right)$
+        \State $u\sim \textsc{Uniform}\left(0,1\right)$
+        \State $\psi\left(u, \theta_{i-1}, \theta'\right) = \frac{1}{n} \log\left[\frac{u q\left(\theta'\mid \theta_{i-1} \right) p \left(\theta_{i-1}\right)}{q\left(\theta_{i-1} \mid \theta_k \right)} \right]$
+        \State $\Lambda_n \left(\theta_{i-1}, \theta'\right) = \frac{1}{n} \sum_{k = 1}^n \log \left[\frac{p\left(x_{k}\mid \theta'\right)}{p\left(x_{k}\mid \theta_{i-1}\right)}\right]$
+        \If{$\Lambda_n\left(\theta_{i-1}, \theta'\right) > \psi \left(u, \theta_{i-1}, \theta'\right)$}
+        \State $\theta_i = \theta'$
+        \Else 
+        \State $\theta_i = \theta_{i-1}$
+         \EndIf
+         \EndFor
+    \end{algorithmic}
+\end{algorithm}
+The reason for rewriting to the form of Algorithm \ref{algo:MH_rewritten} is that Bardenet et al. want to use only a subset of the data to make a Monte Carlo estimate of $\Lambda_n\left(\theta_k, \theta'\right)$.  i.e. if $X$ is the whole data set, and $X^{\star}$ is a subset of the data set of size $t\leq n$, drawn with uniform probability and without replacement, $\Lambda^{\star}_t = \frac{1}{t} \sum_{i = 1}^t \log\left[\frac{p\left(x_i^{\star}\mid \theta'\right)}{p\left(x_i^{\star}\mid \theta_k\right)}\right]$ is an estimate of $\Lambda_n$.  Then, they use concentration inequalities to find a measure of the precision of the Monte Carlo estimate $\Lambda_t^{\star}$ relative to the true value,  $\Lambda_n$. A concentration inequality is an inequality on the form 
+\begin{equation}\label{eq:concentration}
+    P\left(\mid \hat{\theta} - \theta \mid \:\geq \:c\right) \leq 1 - \delta 
+\end{equation}
+In this particular situation, \eqref{eq:concentration} is reformulated to 
+\begin{equation*}
+    P\left(\mid\Lambda_t^{\star}\left(\theta, \theta'\right) - \Lambda_n\left(\theta, \theta'\right)\mid \: \geq \:c_t \right) \leq 1 - \delta_t  
+\end{equation*}{}
+Then, the difference between the estimate and the true value can be controlled, and it is this knowledge of the precision of the estimate that is utilized to limit the required computational power.
+Since $\theta'$ is to be accepted if $\Lambda_n\left(\theta, \theta'\right) > \psi\left(u, \theta, \theta'\right)$,  $\theta'$ will be correctly accepted with at least probability $1 - \delta_t$ if  the following holds 
+\begin{equation}\label{eq:conf_sampler_condition}
+    \mid\Lambda_t^{\star}\left(\theta, \theta'\right) - \psi\left(u, \theta, \theta'\right)\mid \:>\: c_t
+\end{equation} What they do is start with a small sub sample, i.e. $t \ll n$, and if \eqref{eq:conf_sampler_condition} holds, $\theta'$ is accepted. Otherwise, the size of the sub sample is increased, and it is again tested if \eqref{eq:conf_sampler_condition} holds. This procedure is repeated until either $\theta'$ is accepted, i.e. \eqref{eq:conf_sampler_condition} holds, or the sub sample contains all the data points and \eqref{eq:conf_sampler_condition} does not hold, which results in $\theta'$ being rejected. 
+\subsection{Adaptive subsampler using proxies as control variates}
+Bardenet et al. \cite{Bardenet:1} propose using a confidence sampler with proxies for the likelihood, which act as control variates. Control variates are used to reduce the variance of an estimator by relating the original estimator to a known quantity. Say we want to estimate $EX = \theta$ with the unbiased estimator $\hat{\theta}$. Suppose we also have another random variable (\textbf{output variable}) $Y$ where the expectation of $Y$, $EY = \mu$ is know. We define $$\hat{\theta}_{CV} = \hat{\theta} + c\left(Y - \mu\right) $$  Then, $\hat{\theta}_{CV}$ will also be  an unbiased estimator of $\theta$, and if we choose $c$, correctly, it will also have a smaller variance than $\hat{\theta}$. This we can easily show by \begin{equation*}
+\begin{split}
+    \mathrm{Var}\;\hat{\theta}_{CV}  &= \mathrm{Var}\left[\hat{\theta} + c\left(Y - \mu\right)\right]
+     = \mathrm{Var}\left(\hat{\theta} - cY\right) \\ & = \mathrm{Var}\;\hat{\theta} + c^2\mathrm{Var}\;Y + 2c\mathrm{Cov}\left(\hat{\theta}, Y\right)
+\end{split}
+\end{equation*}
+We want to find the $c$ that minimizes the variance of $\hat{\theta}_{CV}$. 
+\begin{equation}\label{eq:control_var}
+\begin{split}
+    \frac{\partial}{\partial c} \mathrm{Var}\; \hat{\theta}_{CV} &= 2c\mathrm{Var}\;Y + 2\mathrm{Cov}\left(\hat{\theta}, Y\right) = 0 \\
+    & \implies c = - \frac{\mathrm{Cov}\left(\hat{\theta}, Y\right)}{\mathrm{Var}\;Y}
+\end{split}
+\end{equation}
+We calculate the second derivative to show that the result from (\ref{eq:control_var}) is indeed a minimum
+\begin{equation*}
+    \frac{\partial^2}{\partial c^2} \mathrm{Var}\; \hat{\theta}_{CV}  = 2\mathrm{Var}\; Y > 0 
+\end{equation*}
+so $c = -\frac{\mathrm{Cov}\left(\hat{\theta}, Y\right)}{\mathrm{Var}\;Y}$ reduces the variance to a minimum. \\
+The confidence sampler introduced in \cite{Bardenet:1} is an alteration of the confidence sampler in \cite{Bardenet:2}. The bottleneck of the confidence sampler introduced in \cite{Bardenet:2} is the calculation of the expectation with respect to $\pi\left(\theta\right)q\left(\theta \mid \theta'\right)$ of the variance of the log likelihood ratio $\log \left(p\left(x\mid \theta\right)\right) / \log \left(p\left(x\mid \theta\right)\right)$ with respect to the empirical distribution of the observations. In order to lower the variance, Bardenet et al. are inspired by Maclaurin and Adams and introduce a proxy, $\powerset$, which is a function of $\theta$ and $\theta'$ and defined for each data point $i$, and let the following be restirictions on $\powerset_i\left(\theta, \theta'\right)$ for any $\theta, \theta' \in \Theta$. 
+\begin{enumerate}
+    \item $\powerset_i\left(\theta, \theta'\right) \approx \ell_i\left(\theta'\right) - \ell_i\left(\theta\right)$
+    \item $ \sum_{i = 1}^n \powerset_i\left(\theta, \theta'\right)$ can be computed cheaply
+    \item $\left| \ell_i\left(\theta'\right) - \ell_i\left(\theta\right) - \powerset_i\left(\theta, \theta'\right)\right|$ can be bounded uniformly in $1\leq i \leq n$ and the bound is cheap to compute. 
+\end{enumerate}
+
+Bardenet et al. rewrite Algorithm \ref{algo:MH} using 
+The idea of Bardenet et al. \cite{Bardenet:2} is to use a Monte Carlo estimate of $\Lambda_n$ using only a subsample of data,  and then do MCMC similarly to Algorithm \ref{algo:MH_rewritten}. 
+\begin{equation*}
+    \Lambda^{\star}_t\left(\theta, \theta'\right) = \frac{1}{t}\sum_{i = 1}^t \log\left[\frac{p\left(x_i\mid\theta'\right)}{p\left(x_i\mid \theta\right)}\right] 
+\end{equation*}
+Where $x^{\star}_1, \ldots, x^{\star}_t$ are drawn uniformly from $\{x_1, \ldots, x_n\}$ without replacement.  They quantify the precision of the estimate $\Lambda_t^{\star}$ by using concentration inequalities, like Hoeffding's inequalty.  \begin{equation}\label{eq:Hoeffdings}
+    P\left(\Lambda_n \left(\theta, \theta'\right) - \Lambda_t^{\star}\left(\theta, \theta'\right) \geq c_t \right) \leq \delta_t \iff P\left(\Lambda_n\left(\theta, \theta'\right) - \Lambda_t^{\star}\left(\theta, \theta'\right) \leq c_t\right) \geq 1 - \delta_t 
+\end{equation}
+Using (\ref{eq:Hoeffdings}), they can control the maximum probability of making a wrong decision by construction of $c_t$.  \textbf{figure more out of this}. \textbf{How to reference to line in algo?}. 
+\textbf{How is this related to confidence samplers?} \textbf{proxy acts as a controlvariate in the concentration inequation?}
+\begin{algorithm}[H]
+    \caption{Confidence Sampler}
+    \label{algo:conf_sampl}
+    \begin{algorithmic}[1] % The number tells where the line numbering should start
+    \Function{ConfidenceSampler}{$p\left(x\mid \theta \right), p\left(\theta\right), q\left(\theta'\mid \theta\right), \theta_0, N_{iter}, \chi, \left(\delta_t\right), C_{\theta, \theta'}$}
+       \For {$i \gets 1 \ldots N_{iter}$}
+       \State $\theta = \theta_{i-1}$
+       \State $\theta' \sim q\left(\cdot|\theta\right)$
+       \State $u \sim \mathcal{U}\left(0,1\right)$
+       \State$\psi\left(u, \theta, \theta'\right) = \frac{1}{n}\log\left[u\frac{p\left(\theta\right)q\left(\theta'\mid \theta\right)}{p\left(\theta'\right)q\left(\theta \mid\theta'\right)}\right]$
+       \State $t = 0$
+       \State $t_{look} = 0$
+       \State $\Lambda^{\star} = 0$
+       \State $\chi^{\star} = \emptyset$
+       \State $b = 1$
+       \State $\textsc{DONE} = \textsc{FALSE}$
+       \While{$\textsc{DONE} = \textsc{FALSE}}$
+       \State $x_{t+1}^{\star}, \ldots, x_b^{\star} \sim_{w.o\;repl.} \chi \setminus \chi^{\star}$
+       \State $\chi^{\star} = \chi^{\star} \bigcup \left\{x_{t+1}^{\star}, \ldots, x_b^{\star}\right\}$
+       \State $\Lambda^{\star} = \frac{1}{b} \left(t\Lambda^{\star} + \sum_{i = t+1}^b \log \left[\frac{p\left(x_i^{\star}\mid\theta'\right)}{p\left(x_i^{\star}\mid \theta\right)}\right]\right)$
+       \State $t = b$
+       \State $c = c_t\left(\delta_{t_{look}}\right)$
+       \State $t_{look} = t_{look} + 1$
+       \State $b = n\wedge \lceil \gamma t \rceil$
+       \If{$|\Lambda^{\star} - \psi\left(u, \theta,\theta'\right) | \geq c \OR t = n$}
+       \State $\textsc{DONE} = \textsc{TRUE}$
+       \EndIf
+       \EndWhile
+       \If{$\Lambda^{\star} > \psi\left(u, \theta, \theta'\right)$}
+       \State{$\theta_i = \theta'$}
+       \Else 
+       \State{$\theta_i = \theta$}
+       \EndIf
+       \EndFor
+       \State \Return $\left(\theta_k\right)_{k = 1, \ldots, N_{iter}}$
+       \EndFunction
+    \end{algorithmic}
+\end{algorithm}
+The idea of Algorithm \ref{algo:conf_sampl} is 
+\textbf{Must keep calculated likelihoods for each data when it is first drawn. We expand on the previously drawn data points, and do not draw entirely new ones. Otherwise computation would be slow. }
+
+\section*{Results}
+We have implemented the Firefly Monte Carlo method, and tried logistic regression on simulated data, as described in section \ref{subsec:data} using both a regular \gls{mh}-sampler as well as the Firefly Monte Carlo. We have also tried logistic regression on two of the classes \textbf{which classes} from MNIST data set \textbf{reference} where we calculate the principal components and use these as explanatory variables for the regression, as demonstrated in \cite{Maclaurin:1}. 
+\section*{Further ideas}
+FlyMC with 1 hidden layer neural network, sigmoid or ReLu activation function. Finnes det nedre grenser? 
+Poissonregresjon?
+Må få til MAP-tuned FlyMCMC, det er visst mye bedre
+\printbibliography
+\end{document}

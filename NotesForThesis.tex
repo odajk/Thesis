@@ -1,0 +1,91 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\title{Notes for thesis}
+\author{Oda Kristensen}
+\date{February 2019}
+
+
+\begin{document}
+\section{IMPORTANT about bounds}
+Now, let us assume the third-order derivatives at the reference point $\theta_{\star}$ can be bounded, say by some constant times $\max_{i}\left\Vert X_i\right\Vert_{\infty}^3$ \textbf{as will be the case for the exponential families}. 
+\section{What is Markov Chain Monte Carlo}
+\section{What is Firefly Monte Carlo}
+\textbf{Alt som står i denne delen er hentet fra MacLaurin og Adams. Må nok skrives om før det kan settes inn i oppgaven} åæøæåæ
+
+"The Firefly Monte Carlo alorithm tackles the problem of sampling from the posterior distribution of a probabilistic model." (MacLaurin and Adams, p. 2)
+Assumes: $N$ data have been observed $\{x_n\}_{n = 1}^N$ and that these data are conditionally independent given $\theta$ under a likelihood $p(x_n|\theta)$
+
+For hver $n$ introduserer vi en binær hjelpevariablel $z_n \in {0,1}$, og en funksjon $B_n(\theta)$ som er strengt positiv og nedre begrenset av den $n$'te likelihooden : $0 < B_n(\theta)\leq L_n(\theta}$
+
+
+\subsection{The Metropolis-Hastings algorithm}
+The Markov Chain Monte Carlo methods, are algorithms used to sample data from a probability distribution. The algorithms consists of drawing samples from a Markov chain, which has the desired probability distribution as its equilibrium distribution. 
+
+The two most frequently used algorithms for MCMC are the Metropolis-Hastings algorithm and the Gibbs sampler. 
+
+Using MCMC is important in many applications of statistics, which has proven to be very useful when statistics cannot be calculated analytically. 
+\textbf{Insert description of Metropolis-Hastings algorithm here}
+\textbf{Skriv en bedre avslutning på setningen}.
+
+\subsection{derivatives of the normal distribution}
+\begin{equation*}
+\begin{split}
+    \frac{\partial \ell\left(\mu, \sigma\right)}{\partial\mu} &= \frac{x - \mu}{\sigma^2}, \quad \frac{\partial \ell\left(\mu,\sigma\right)}{\partial \sigma} = - \frac{1}{\sigma} + \frac{\left(x - \mu\right)^2}{\sigma^3} \\
+    \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \mu ^2} &= -\frac{1}{\sigma^2}, \quad \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \mu \partial\sigma} = -\frac{\left(x - \mu\right)}{\sigma^3} \\
+    \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \sigma^2} &= \frac{1}{\sigma^2} - \frac{3\left(x - \mu\right)^2}{\sigma^4}
+\end{split}
+\end{equation*}{}
+\subsection{Third derivative of the normal distribution}
+For the third derivatives of $\ell_n\left(\mu, \sigma\right)$ we have 
+\begin{equation}
+  \begin{split}
+  \frac{\partial^3 \ell_n\left(\mu, \sigma\right)}{\partial\mu^3} = \frac{\partial}{\partial \mu}\left(-\frac{1}{\sigma^2}\right) &= 0\\ \\
+  \frac{\partial^3 \ell_n(\mu, \sigma)}{\partial\mu^2\partial\sigma} = \frac{\partial}{\partial \mu}\left(-2\frac{\left(x_n - \mu\right)}{\sigma^3}\right) & = \frac{2}{\sigma^3} \\ \\
+  \frac{\partial^3 \ell_n(\mu, \sigma)}{\partial\mu \partial\sigma^2} = \frac{\partial}{\partial \sigma}\left(-\frac{2\left(x-\mu\right)}{\sigma^3}\right)&= \frac{6\left(x-\mu\right)}{\sigma^4} \\ \\
+  \frac{\partial^3\ell_n(\mu, \sigma)}{\partial\sigma^3} = \frac{\partial}{\partial \sigma} \left(\frac{1}{\sigma^2} - 3\frac{\left(x_n - \mu\right)}{\sigma^4}\right)  & = -\frac{2}{\sigma^3}  + 12 \frac{\left(x - \mu \right)}{\sigma^5}
+\end{split}
+\end{equation}
+\subsubsection{Alternative parametrisation of the normal distribution}
+\begin{equation}\begin{split}
+    L_n(\mu, \tau) &= \sqrt{\frac{\tau}{2\pi}}e^{-\frac{\tau\left(x - \mu\right)^2}{2}} \\
+    \implies \ell_n(\mu, \tau) &= \log\left(\sqrt{\frac{\tau}{2\pi}}\right) - \frac{\tau\left(x - \mu\right)^2}{2}\\
+    & = \frac{1}{2}\log \tau - \frac{1}{2} \log 2\pi - \frac{\tau\left(x - \mu\right)^2}{2}
+\end{split}
+\end{equation}
+\begin{equation}
+\begin{split}
+    \frac{\partial \ell_n\left(\mu, \tau\right)}{\partial \mu} &= \frac{- 
+    \left(-2\right)\tau\left(x_n - \mu\right)}{2} = \tau\left(x_n - \mu\right) \\
+    \frac{\partial \ell_n\left(\mu, \tau\right)}{\partial \tau} &= \frac{1}{2\tau} - \frac{\left(x_n - \mu\right)^2}{2}\\
+    \frac{\partial^2 \ell_n\left(\mu, \tau\right)}{\partial\mu^2} &= \frac{\partial}{\partial\mu} \tau\left(x - \mu\right) = -\tau \\
+    \frac{\partial^2\ell_n\left(\mu,\tau\right)}{\partial\mu\partial\tau} &= \frac{\partial}{\partial \tau} \tau\left(x_n - \mu\right) = x_n - \mu \\
+    \frac{\partial^2\ell_n\left(\mu, \tau\right)}{\partial \tau^2} &= \frac{\partial}{\partial\tau} \left(\frac{1}{2\tau} - \frac{\left(x_n - \mu\right)^2}{2}\right) = -\frac{1}{2\tau^2}\\
+    \frac{\partial ^3 \ell_n\left(\mu, \tau\right)}{\partial \mu^3} &= \frac{\partial}{\partial \mu} -\tau = 0\\
+    \frac{\partial^3 \ell_n\left(\mu, \tau\right)}{\partial \mu^2\partial\tau} &=\frac{\partial}{\partial \tau} \left(-\tau\right) = -1 \\
+    \frac{\partial^3\ell_n\left(\mu, \tau\right)}{\partial\mu\partial\tau^2} &= \frac{\partial}{\partial\mu}\left(-\frac{1}{2\tau^2}\right) = 0 \\
+    \frac{\partial^3\ell_n\left(\mu, \tau\right)}{\partial \tau^3} &= \frac{\partial}{\partial \tau} \left(-\frac{1}{2\tau^2}\right) = \frac{1}{\tau^3}
+\end{split}
+\end{equation}
+Remember: dimensions of feature-vector $x$ : $n\times p $, dimensions of parameter vector $\beta$ : $p \times 1$ 
+\textbf{Can we just use glm for tuning? in stead of stochastic gradient descent}
+
+
+\textbf{Tror det er noe galt med dimensjonene på beta, det blir galt i rnorm inne i MCMC'en}
+
+
+$p\left(\theta\mid x\right)$  $p(\theta\mid \{x\}_{n=1}^N)$\todo{noe rart}
+\cite{BDA3}. Here, $\theta$ is some parameter of interest, and $\{x_n\}_{n=1}^N$ are data drawn from some distribution dependent on $\theta$. We create a Markov chain by generating sequences of the parameters that have the Markov property. This means that if we have a sequence of random variables $\theta^1, \theta^2, \ldots,$ then, the distribution of $\theta^t$ is only dependent on the previous value, $\theta^{t-1}$ 
+
+
+
+\subsection{Comments to Bardenets examples.ipynb}
+Calculate $\texttt{maxx}, \texttt{minx}$, using $\texttt{np.max(x)}, \texttt{np.min(x)}$, but these can only be evaluated for scalar data.
+Hvorfor tar de $\log$ på standardavviket? 
+$\texttt{XminusMUMax}$: The maximum difference between the estimate and the data point? $\texttt{SigmaMin}$: The minimum of the sigma estimators?
+This is how the bound works: 
+
+First: Calculate third derivatives. On the largest interval we can obtain with the data points $x$ and some estimator of $\theta$, we calculate the value of the third derivative. (Shift it to be a normal distribution with expectation 0). Then, we calculate the remainder $R = \frac{M\times|\theta_i-\theta_{MAP}|^3}{3!}$
+
+
+\end{document} 
