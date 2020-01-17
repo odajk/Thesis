@@ -39,7 +39,9 @@ $\mathbf{X}$ : \\
 $\mathbf{x}$: observed data \\
 $\mathbf{Y}$: \\
 $\mathbf{y}$: response \\
-$\mathbf{z}:$ auxilliary variables 
+$\mathbf{z}:$ auxilliary variables \\ 
+$n$: indexes the data \\ 
+$i$: indexes the simulated parameters 
 \subsection{The data set}\label{subsec:data}
 In this thesis, we will test different methods for \textbf{statistical inference} on simulated binary data. These data are simulated in R in the following way
 \begin{lstlisting}[caption={simulation of binary data}, label={lst:simulation}]
@@ -143,16 +145,16 @@ The \gls{mh} algorithm is a very general algorithm and one of the most popular a
     \begin{algorithmic}[1] % The number tells where the line numbering should start\
         \State $\theta \sim \textsc{InitialDist}$ 
         \For {$i \gets 1 \ldots \textsc{Iters}$}
-        \State$\theta' \sim \theta_{i-1} + \eta$ where $\eta\sim g\left(\cdot \mid \theta_{i-1}\right)$
+        \State$\theta' \sim \theta^{\left(i-1\right)} + \eta$ where $\eta\sim g\left(\cdot \mid \theta^{\left(i-1\right)}\right)$
         \State $u\sim \textsc{Uniform}\left(0,1\right)$
-        \If{ $\frac{\textsc{JointPosterior} \left(\theta'; \{z_n\}_{n = 1}^N\right)g\left(\theta_{i-1}\mid \theta'\right)}{\textsc{JointPosterior} \left(\theta_{i-1}; \{z_n\}_{n = 1}^N\right)g\left(\theta'\mid \theta_{i-1}\right)} > u$}
-        \State $\theta_i = \theta'$
+        \If{ $\frac{\textsc{JointPosterior} \left(\theta'\right)g\left(\theta^{\left(i-1\right)}\mid \theta'\right)}{\textsc{JointPosterior} \left(\theta^{\left(i-1\right)}\right)g\left(\theta'\mid \theta^{\left(i-1\right)}\right)} > u$}
+        \State $\theta^{\left(i\right)} = \theta'$
         \Else 
-        \State $\theta_i = \theta_{i-1}$
+        \State $\theta^{\left(i\right)} = \theta^{\left(i-1\right)}$
          \EndIf
          \EndFor
          \\
-        \Function{JointPosterior}{$\theta; \{z_n\}_{n = 1}^N$} 
+        \Function{JointPosterior}{$\theta$} 
             \State $P \gets p\left(\theta\right)\times \prod_{n=1}^N L_n\left(\theta\right)$
            \State \textbf{return} $P$
         \EndFunction
@@ -166,7 +168,6 @@ As we see from the set-up of the Metropolis-Hastings algorithm, the computationa
 What is a bigger problem for the computational complexity of the Metropolis-Hastings algorithm is the calculation of the likelihood function for all the data with the given parameters. When $N$ is the number of data points, evaluating this likelihood function has a computational cost of  $\mathcal{O}(N)$, or more for complex models. If the data set that we calculate the likelihood from is large, the computer will spend a significant amount of time calculating the likelihood at each iteration, and so the program will run slowly. 
 \section{Method}
 \subsection{Firefly Monte Carlo}
-\todo{Noen ting jeg ikke har fått rettet opp i siden sist}
 In their paper from 2014, Maclaurin and Adams  introduce the Firefly Monte Carlo method \cite{Maclaurin:1}. The aim of this method is to reduce the computational cost of MH-like algorithms by evaluating the likelihood function for only a subset of the data, while still leaving "[...],the true full-data posterior distribution invariant", meaning that the true posterior $p(\theta\mid\{x_n\}_{n=1}^N)$ is still the stationary distribution of the Markov chain.  
 We assume the data $x_n$ conditionally independent given $\theta$.
 For each data point $x_n$ Maclaurin and Adams introduce auxiliary variables $z_n \in \{0, 1\}$, "and a function $B_n(\theta)$ which is a strictly positive, lower bound of the $n$'th likelihood, $L_n(\theta)$". 
@@ -183,7 +184,7 @@ We say that a data point $x_n$ is bright if $z_n = 1$, and that it is dark if $z
      & = p(\theta)p(\{x_n\}_{n=1}^N\mid\theta)p(\{z_n\}_{n=1}^N\mid \{x_n\}_{n=1}^N, \theta)
 \end{split}
 \end{equation*}{}
-\todo{Bruker samme subscript for bestemt indeks som for generelle indekser} This can be simplified further by using that each $z_n$ is only dependent on the $n$'th data point $x_n$ and that the $x_n$'s are conditionally independent given $\theta$. The result is the following joint probability 
+ This can be simplified further by using that each $z_n$ is only dependent on the $n$'th data point $x_n$ and that the $x_n$'s are conditionally independent given $\theta$. The result is the following joint probability 
 \begin{equation}\label{eq:joint}
            p(\theta, \{z_n\}_{n=1}^N \mid \{x_n\}_{n=1}^N) \propto p(\theta) \prod_{n=1}^N p(x_n\mid\theta)p(z_n\mid x_n, \theta)
 \end{equation}
@@ -218,14 +219,14 @@ It is not always trivial to find such a $B_n$. In the case of normally distribut
         \For {$i \gets 1 \ldots \textsc{Iters}$}
         \For {$j \gets \left[N\times \textsc{ResampleFraction}\right]$}
         \State $n\sim \textsc{RandInteger}\left(1, N\right)$
-        \State $z_n \sim \textsc{Bernoulli}\left(1 - B_n\left(\theta_{i - 1}\right)/L_n\left(\theta_{i-1}\right)\right) $
+        \State $z_n \sim \textsc{Bernoulli}\left(1 - B_n\left(\theta^{\left(i - 1\right)}\right)/L_n\left(\theta^{\left(i-1\right)}\right)\right) $
         \EndFor
-        \State$\theta' \sim \theta_{i-1} + \eta$ where $\eta\sim \textsc{Normal}\left(0, \epsilon^2 \mathbb{1}_D\right)$
+        \State$\theta' \sim \theta^{\left(i-1\right)} + \eta$ where $\eta\sim \textsc{Normal}\left(0, \epsilon^2 \mathbb{1}_D\right)$
         \State $u\sim \textsc{Uniform}\left(0,1\right)$
-        \If{ $\frac{\textsc{JointPosterior} \left(\theta'; \{z_n\}_{n = 1}^N\right)}{\textsc{JointPosterior} \left(\theta_{i-1}; \{z_n\}_{n = 1}^N\right)} > u$}
-        \State $\theta_i = \theta'$
+        \If{ $\frac{\textsc{JointPosterior} \left(\theta'; \{z_n\}_{n = 1}^N\right)}{\textsc{JointPosterior} \left(\theta^{\left(i-1\right)}; \{z_n\}_{n = 1}^N\right)} > u$}
+        \State $\theta^{\left(i\right)} = \theta'$
         \Else 
-        \State $\theta_i = \theta_{i-1}$
+        \State $\theta^{\left(i\right)} = \theta^{\left(i-1\right)}$
          \EndIf
          \EndFor
          \\
@@ -307,7 +308,6 @@ Then we can apply (\ref{eq:taylor_lagr}) to find the remainder of the second ord
 
 
 \subsection{Finding the lower bound of the likelihood}
-\todo{Denne seksjonen er ikke så aktuell akkurat nå}
 In \cite{Bardenet:1}, the log-likelihood of the normal distributed data is bounded by a second order Taylor approximation about the maximum likelihood estimate (MLE). i.e. 
 \begin{equation}
   \hat{\ell}_n = \ell_n(\theta_{\star} ) + g_{n,\star}^T\left(\theta - \theta_{\star}\right) + \frac{1}{2}\left(\theta - \theta_{\star}\right)^T H_{n, \star}\left(\theta - \theta_{\star}\right)
@@ -346,22 +346,21 @@ We have expanded about $\theta = \left(\mu, \sigma\right)$.
 \section{Bardenet et. al's confidence sampler}
 \subsection{Original adaptive subsampler (2014)}
 In their paper from 2014, Bardenet et al \cite{Bardenet:2} propose an adaptive subsampling method to reduce the computational cost of \gls{mh} for large data sets.  To reduce this cost, they take advantage of concentration equations in combination with subsampling of data. First, they rewrite the accept-reject step in, Algorithm \ref{algo:MH}  (line 8)  
-\todo{weird notation)}
 \begin{equation}\label{eq:some_use?}
 \begin{split}
-    u < \frac{\pi\left(\theta\right)q\left(\theta_k\mid \theta'\right)}{\pi \left(\theta_k\right)q\left(\theta'\mid \theta_k\right)} &= \frac{p\left(x_1, \ldots x_n \mid \theta'\right) p\left(\theta\right)q\left(\theta_k\mid \theta'\right)}{p\left(x_1, \ldots x_n\mid \theta_k\right)p\left(\theta_k\right)q\left(\theta'\mid\theta_k\right)} \\
-    \implies \frac{u q\left(\theta'\mid \theta_k \right)p\left(\theta_k\right)}{q\left(\theta_k\mid\theta'\right)p\left(\theta'\right)} &< \frac{p\left(x_1, \ldots, x_n \mid \theta'\right)}{p\left(x_1, \ldots, x_n \mid \theta_k\right)} \\
-    \implies \frac{u q\left(\theta'\mid \theta_k \right) p\left(\theta_k\right)}{q\left(\theta_k \mid \theta'\right) p \left(\theta'\right)} &< \frac{\prod_{i = 1}^n p\left(x_i\mid \theta'\right)}{\prod_{i = 1}^n p\left(x_i \mid \theta_k\right)}
-\end{split}
+    u < \frac{\pi\left(\theta'\right)q\left(\theta^{(i-1)}\mid \theta'\right)}{\pi \left(\theta^{(i-1)}k\right)q\left(\theta'\mid \theta^{(i-1)}\right)} &= \frac{p\left(x_1, \ldots x_N \mid \theta'\right) p\left(\theta'\right)q\left(\theta^{(i-1)}\mid \theta'\right)}{p\left(x_1, \ldots x_N\mid \theta^{(i-1)}\right)p\left(\theta^{(i-1)}\right)q\left(\theta'\mid\theta^{(i-1)}\right)} \\ 
+    \implies \frac{u q\left(\theta'\mid \theta^{(i-1)} \right)p\left(\theta^{(i-1)}\right)}{q\left(\theta^{(i-1)}\mid\theta'\right)p\left(\theta'\right)} &< \frac{p\left(x_1, \ldots, x_N \mid \theta'\right)}{p\left(x_1, \ldots, x_N \mid \theta^{(i-1)}\right)} \\
+    \implies \frac{u q\left(\theta'\mid \theta^{(i-1)} \right) p\left(\theta^{(i-1)}\right)}{q\left(\theta^{(i-1)} \mid \theta'\right) p \left(\theta'\right)} &< \frac{\prod_{n = 1}^N p\left(x_n\mid \theta'\right)}{\prod_{n = 1}^N p\left(x_n \mid \theta^{(i-1)}\right)}
+    \end{split}
 \end{equation}
-Next, we take the logarithm on both sides of \ref{eq:some_use?}, and divide by $n$ and get
+Next, we take the logarithm on both sides of \ref{eq:some_use?}, and divide by $N$ and get
 \begin{equation}\label{eq:psi_lambda}
 \begin{split}
-     \frac{1}{n} \log \left[\frac{u q\left(\theta' \mid \theta_k\right)p\left(\theta_k\right)}{q\left(\theta_k\mid \theta'\right)p\left(\theta'\right)}\right] &< \frac{1}{n} \sum_{i = 1}^n \log \left[\frac{p\left(x_i\mid \theta'\right)}{p\left(x_i \mid \theta_k\right)}\right] \\
-     \iff  \psi\left(u, \theta_k, \theta'\right) &< \Lambda_n\left(\theta_k,\theta'\right) 
+     \frac{1}{N} \log \left[\frac{u q\left(\theta' \mid \theta^{\left(i-1\right)}\right)p\left(\theta^{\left(i-1\right)}\right)}{q\left(\theta^{\left(i-1\right)}\mid \theta'\right)p\left(\theta'\right)}\right] &< \frac{1}{N} \sum_{n = 1}^N \log \left[\frac{p\left(x_n\mid \theta'\right)}{p\left(x_n \mid \theta^{(i-1)}\right)}\right] \\
+     \iff  \psi\left(u, \theta^{(i-1)}, \theta'\right) &< \Lambda_N\left(\theta^{(i-1)},\theta'\right) 
 \end{split}
 \end{equation}
-Where $\psi\left(u, \theta_k, \theta'\right)\coloneqq \frac{1}{n}\log\left[\frac{u q\left(\theta'\mid\theta_k\right)p\left(\theta_k\right)}{q\left(\theta_k\mid \theta'\right)p\left(\theta'\right)}\right]$ and $\Lambda_n\left(\theta_k, \theta'\right) \coloneqq \frac{1}{n}\sum_{i = 1}^n \log\left[\frac{p\left(x_i\mid \theta'\right)}{p\left(x_i\mid\theta_k\right)}\right]$. Then, it is evident from \eqref{eq:some_use?} and \eqref{eq:psi_lambda} that accepting $\theta'$ if $u < \frac{p\left(x_1\ldots, x_n\mid \theta\right)p\left(\theta\right)q\left(\theta_k\mid \theta'\right)}{p\left(x_1, \ldots, x_n\mid \theta_k\right)p\left(\theta_k\right)q\left(\theta_k\mid\theta'\right)}$ is equivalent to accepting $\theta'$ if $\Lambda_n\left(\theta_k, \theta'\right)>\psi\left(u,\theta_k\theta'\right)$. Using this, Algorithm \ref{algo:MH} can be rewritten as the following:
+Where $\psi\left(u, \theta^{(i-1)}, \theta'\right)\coloneqq \frac{1}{N}\log\left[\frac{u q\left(\theta'\mid\theta^{(i-1)}\right)p\left(\theta^{(i-1)}\right)}{q\left(\theta{(i-1)}\mid \theta'\right)p\left(\theta'\right)}\right]$ and $\Lambda_N\left(\theta^{(i-1)}, \theta'\right) \coloneqq \frac{1}{N}\sum_{n = 1}^N \log\left[\frac{p\left(x_n\mid \theta'\right)}{p\left(x_n\mid\theta^{(i-1)}\right)}\right]$. Then, it is evident from \eqref{eq:some_use?} and \eqref{eq:psi_lambda} that accepting $\theta'$ if $u < \frac{p\left(x_1\ldots, x_n\mid \theta\right)p\left(\theta\right)q\left(\theta_k\mid \theta'\right)}{p\left(x_1, \ldots, x_n\mid \theta_k\right)p\left(\theta_k\right)q\left(\theta_k\mid\theta'\right)}$ is equivalent to accepting $\theta'$ if $\Lambda_n\left(\theta_k, \theta'\right)>\psi\left(u,\theta_k\theta'\right)$. Using this, Algorithm \ref{algo:MH} can be rewritten as the following:
 \begin{algorithm}[H] 
     \caption{Rewritten Metropolis-Hastings}
     \label{algo:MH_rewritten}
@@ -435,7 +434,7 @@ Using (\ref{eq:Hoeffdings}), they can control the maximum probability of making 
     \begin{algorithmic}[1] % The number tells where the line numbering should start
     \Function{ConfidenceSampler}{$p\left(x\mid \theta \right), p\left(\theta\right), q\left(\theta'\mid \theta\right), \theta_0, N_{iter}, \chi, \left(\delta_t\right), C_{\theta, \theta'}$}
        \For {$i \gets 1 \ldots N_{iter}$}
-       \State $\theta = \theta_{i-1}$
+       \State $\theta = \theta^{\left(i-1\right)}$
        \State $\theta' \sim q\left(\cdot|\theta\right)$
        \State $u \sim \mathcal{U}\left(0,1\right)$
        \State$\psi\left(u, \theta, \theta'\right) = \frac{1}{n}\log\left[u\frac{p\left(\theta\right)q\left(\theta'\mid \theta\right)}{p\left(\theta'\right)q\left(\theta \mid\theta'\right)}\right]$
@@ -448,7 +447,7 @@ Using (\ref{eq:Hoeffdings}), they can control the maximum probability of making 
        \While{$\textsc{DONE} = \textsc{FALSE}}$
        \State $x_{t+1}^{\star}, \ldots, x_b^{\star} \sim_{w.o\;repl.} \chi \setminus \chi^{\star}$
        \State $\chi^{\star} = \chi^{\star} \bigcup \left\{x_{t+1}^{\star}, \ldots, x_b^{\star}\right\}$
-       \State $\Lambda^{\star} = \frac{1}{b} \left(t\Lambda^{\star} + \sum_{i = t+1}^b \log \left[\frac{p\left(x_i^{\star}\mid\theta'\right)}{p\left(x_i^{\star}\mid \theta\right)}\right]\right)$
+       \State $\Lambda^{\star} = \frac{1}{b} \left(t\Lambda^{\star} + \sum_{n = t+1}^b \log \left[\frac{p\left(x_n^{\star}\mid\theta'\right)}{p\left(x_n^{\star}\mid \theta\right)}\right]\right)$
        \State $t = b$
        \State $c = c_t\left(\delta_{t_{look}}\right)$
        \State $t_{look} = t_{look} + 1$
@@ -458,12 +457,12 @@ Using (\ref{eq:Hoeffdings}), they can control the maximum probability of making 
        \EndIf
        \EndWhile
        \If{$\Lambda^{\star} > \psi\left(u, \theta, \theta'\right)$}
-       \State{$\theta_i = \theta'$}
+       \State{$\theta^{\left(i\right)} = \theta'$}
        \Else 
-       \State{$\theta_i = \theta$}
+       \State{$\theta^{\left(i\right)} = \theta$}
        \EndIf
        \EndFor
-       \State \Return $\left(\theta_k\right)_{k = 1, \ldots, N_{iter}}$
+       \State \Return $\left(\theta^{\left(i\right)}\right)_{i = 1, \ldots, N_{iter}}$
        \EndFunction
     \end{algorithmic}
 \end{algorithm}

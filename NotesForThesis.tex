@@ -32,7 +32,7 @@ Using MCMC is important in many applications of statistics, which has proven to 
 \begin{equation*}
 \begin{split}
     \frac{\partial \ell\left(\mu, \sigma\right)}{\partial\mu} &= \frac{x - \mu}{\sigma^2}, \quad \frac{\partial \ell\left(\mu,\sigma\right)}{\partial \sigma} = - \frac{1}{\sigma} + \frac{\left(x - \mu\right)^2}{\sigma^3} \\
-    \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \mu ^2} &= -\frac{1}{\sigma^2}, \quad \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \mu \partial\sigma} = -\frac{\left(x - \mu\right)}{\sigma^3} \\
+    \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \mu ^2} &= -\frac{1}{\sigma^2}, \quad \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \mu \partial\sigma} = -2\frac{\left(x - \mu\right)}{\sigma^3} \\
     \frac{\partial^2 \ell\left(\mu, \sigma\right)}{\partial \sigma^2} &= \frac{1}{\sigma^2} - \frac{3\left(x - \mu\right)^2}{\sigma^4}
 \end{split}
 \end{equation*}{}
@@ -43,7 +43,7 @@ For the third derivatives of $\ell_n\left(\mu, \sigma\right)$ we have
   \frac{\partial^3 \ell_n\left(\mu, \sigma\right)}{\partial\mu^3} = \frac{\partial}{\partial \mu}\left(-\frac{1}{\sigma^2}\right) &= 0\\ \\
   \frac{\partial^3 \ell_n(\mu, \sigma)}{\partial\mu^2\partial\sigma} = \frac{\partial}{\partial \mu}\left(-2\frac{\left(x_n - \mu\right)}{\sigma^3}\right) & = \frac{2}{\sigma^3} \\ \\
   \frac{\partial^3 \ell_n(\mu, \sigma)}{\partial\mu \partial\sigma^2} = \frac{\partial}{\partial \sigma}\left(-\frac{2\left(x-\mu\right)}{\sigma^3}\right)&= \frac{6\left(x-\mu\right)}{\sigma^4} \\ \\
-  \frac{\partial^3\ell_n(\mu, \sigma)}{\partial\sigma^3} = \frac{\partial}{\partial \sigma} \left(\frac{1}{\sigma^2} - 3\frac{\left(x_n - \mu\right)}{\sigma^4}\right)  & = -\frac{2}{\sigma^3}  + 12 \frac{\left(x - \mu \right)}{\sigma^5}
+  \frac{\partial^3\ell_n(\mu, \sigma)}{\partial\sigma^3} = \frac{\partial}{\partial \sigma} \left(\frac{1}{\sigma^2} - 3\frac{\left(x_n - \mu\right)^2}{\sigma^4}\right)  & = -\frac{2}{\sigma^3}  + 12 \frac{\left(x - \mu \right)^2}{\sigma^5}
 \end{split}
 \end{equation}
 \subsubsection{Alternative parametrisation of the normal distribution}
@@ -87,5 +87,18 @@ This is how the bound works:
 
 First: Calculate third derivatives. On the largest interval we can obtain with the data points $x$ and some estimator of $\theta$, we calculate the value of the third derivative. (Shift it to be a normal distribution with expectation 0). Then, we calculate the remainder $R = \frac{M\times|\theta_i-\theta_{MAP}|^3}{3!}$
 
-
+\section{Bardenet confidence sampler with proxies}
+"Even in the presence of proxies, the proofs of (Bardenet et al. 2014, Lemma 3.1, Proposition 3.2) apply with straightforward modifications, so that we can extend Proposition 3 to the proxy case. The major advantage of this new algorithm is that the sample standard deviation $\hat{\sigma}_{t, \theta, \theta'}$ and range $C_{\theta, \theta'}$ in the concentration inequality are replaced by those of 
+$$\left\{\log\left[\frac{p\left(x_i^{\star}\mid \theta'\right)}{p\left(x_i^{\star}\mid \theta\right)}\right] - \mathscr{p}_i\left(\theta, \theta'\right), i = 1, \ldots t\right\}$$
+General concentration inequality 
+\begin{equation}
+P\left(\mid \theta - \theta'\mid \geq c_t \right) \leq \delta_t   
+\end{equation}{}
+Hoeffding's concentration inequality 
+\begin{equation*}
+    c_t = C_{\theta, \theta'} \sqrt{\frac{2\left(1-f_t^{\star}\log\left(2/\delta_t\right)}{t}}
+\end{equation*}
+vs .Hoeffding's concentration inequality in examples from Bardenet
+\\ \\ 
+What does $\texttt{combineMeanAndSSQs}$ do?
 \end{document} 
