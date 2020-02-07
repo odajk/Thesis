@@ -1,22 +1,20 @@
+\begin{document}
 \documentclass{article}
-\usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \title{Notes for thesis}
 \author{Oda Kristensen}
 \date{February 2019}
-
-
-\begin{document}
+\maketitle
 \section{IMPORTANT about bounds}
 Now, let us assume the third-order derivatives at the reference point $\theta_{\star}$ can be bounded, say by some constant times $\max_{i}\left\Vert X_i\right\Vert_{\infty}^3$ \textbf{as will be the case for the exponential families}. 
 \section{What is Markov Chain Monte Carlo}
 \section{What is Firefly Monte Carlo}
-\textbf{Alt som står i denne delen er hentet fra MacLaurin og Adams. Må nok skrives om før det kan settes inn i oppgaven} åæøæåæ
+\textbf{Alt som str i denne delen er hentet fra MacLaurin og Adams. Must nok skrives om before det kan settes inn i oppgaven} 
 
 "The Firefly Monte Carlo alorithm tackles the problem of sampling from the posterior distribution of a probabilistic model." (MacLaurin and Adams, p. 2)
 Assumes: $N$ data have been observed $\{x_n\}_{n = 1}^N$ and that these data are conditionally independent given $\theta$ under a likelihood $p(x_n|\theta)$
 
-For hver $n$ introduserer vi en binær hjelpevariablel $z_n \in {0,1}$, og en funksjon $B_n(\theta)$ som er strengt positiv og nedre begrenset av den $n$'te likelihooden : $0 < B_n(\theta)\leq L_n(\theta}$
+For hver $n$ introduserer vi en binary hjelpevariablel $z_n \in {0,1}$, og en funksjon $B_n(\theta)$ som er strengt positiv og nedre begrenset av den $n$'te likelihooden : $0 < B_n(\theta)\leq L_n(\theta}$
 
 
 \subsection{The Metropolis-Hastings algorithm}
@@ -26,7 +24,7 @@ The two most frequently used algorithms for MCMC are the Metropolis-Hastings alg
 
 Using MCMC is important in many applications of statistics, which has proven to be very useful when statistics cannot be calculated analytically. 
 \textbf{Insert description of Metropolis-Hastings algorithm here}
-\textbf{Skriv en bedre avslutning på setningen}.
+\textbf{Skriv en bedre avslutning of setningen}.
 
 \subsection{derivatives of the normal distribution}
 \begin{equation*}
@@ -75,7 +73,8 @@ Remember: dimensions of feature-vector $x$ : $n\times p $, dimensions of paramet
 
 
 $p\left(\theta\mid x\right)$  $p(\theta\mid \{x\}_{n=1}^N)$\todo{noe rart}
-\cite{BDA3}. Here, $\theta$ is some parameter of interest, and $\{x_n\}_{n=1}^N$ are data drawn from some distribution dependent on $\theta$. We create a Markov chain by generating sequences of the parameters that have the Markov property. This means that if we have a sequence of random variables $\theta^1, \theta^2, \ldots,$ then, the distribution of $\theta^t$ is only dependent on the previous value, $\theta^{t-1}$ 
+%\cite{BDA3}.
+Here, $\theta$ is some parameter of interest, and $\{x_n\}_{n=1}^N$ are data drawn from some distribution dependent on $\theta$. We create a Markov chain by generating sequences of the parameters that have the Markov property. This means that if we have a sequence of random variables $\theta^1, \theta^2, \ldots,$ then, the distribution of $\theta^t$ is only dependent on the previous value, $\theta^{t-1}$ 
 
 
 
@@ -101,4 +100,5 @@ Hoeffding's concentration inequality
 vs .Hoeffding's concentration inequality in examples from Bardenet
 \\ \\ 
 What does $\texttt{combineMeanAndSSQs}$ do?
+
 \end{document} 
